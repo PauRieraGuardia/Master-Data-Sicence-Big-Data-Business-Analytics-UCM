@@ -1,0 +1,116 @@
+
+
+// Vamos a ver las colecciones cargadas a través de MongoDB Compass
+
+show collections
+
+// Creación de indices para cada colección
+
+print("Creando índices para elo_ratings...");
+db.elo_ratings.createIndex({ Country: 1 });                 // Buscar por país
+db.elo_ratings.createIndex({ Club: 1 });                    // Buscar por club
+db.elo_ratings.createIndex({ Date: 1 });                    // Filtrar por fecha
+db.elo_ratings.createIndex({ Elo: -1 });                    // Ordenar por rating
+
+print("Creando índices para matches...");
+db.matches.createIndex({ MatchDate: 1 });                   // Filtrar por fecha
+db.matches.createIndex({ HomeTeam: 1 });                    // Buscar por equipo local
+db.matches.createIndex({ AwayTeam: 1 });                    // Buscar por equipo visitante
+db.matches.createIndex({ FTResult: 1 });                    // Filtrar por resultado final
+db.matches.createIndex({ HTResult: 1 });                    // Resultado al medio tiempo
+db.matches.createIndex({ FTHome: 1 });                      // Goles local
+db.matches.createIndex({ FTAway: 1 });                      // Goles visitante
+db.matches.createIndex({ HomeShots: 1 });                   // Disparos local
+db.matches.createIndex({ AwayShots: 1 });                   // Disparos visitante
+db.matches.createIndex({ HomeTarget: 1 });                  // Disparos a puerta local
+db.matches.createIndex({ AwayTarget: 1 });                  // Disparos a puerta visitante
+db.matches.createIndex({ HomeFouls: 1 });                   // Faltas local
+db.matches.createIndex({ AwayFouls: 1 });                   // Faltas visitante
+db.matches.createIndex({ HomeCorners: 1 });                 // Córners local
+db.matches.createIndex({ AwayCorners: 1 });                 // Córners visitante
+db.matches.createIndex({ HomeYellow: 1 });                  // Amarillas local
+db.matches.createIndex({ AwayYellow: 1 });                  // Amarillas visitante
+db.matches.createIndex({ HomeRed: 1 });                     // Rojas local
+db.matches.createIndex({ AwayRed: 1 });                     // Rojas visitante
+
+
+// 2.2.1 Inserción de un nuevo documento 
+db.elo_ratings.insertOne({
+  Date: new Date("2025-03-01"),
+  Club: "Valencia CF",
+  Country: "ESP",
+  Elo: 1470.33,
+})
+
+// 2.2.2. Actualización de datos
+db.elo_ratings.updateOne(
+  { Club: "Valencia CF" },
+  {
+    $set: { Elo: 1490.50 },
+    $currentDate: { lastUpdated: true }
+  }
+)
+
+// 2.2.3. Proyección y filtrado
+db.matches.find({
+  FTResult: "H",
+  HomeTarget: { $gt: 3 },
+  HomeFouls: { $lt: 2 }
+},
+{
+  _id: 0,
+  MatchDate: 1,
+  HomeTeam: 1,
+  AwayTeam: 1,
+  FTHome: 1,
+  FTAway: 1
+}).limit(5)
+
+// 2.3.1. Promedios y máximos de goles 
+db.matches.aggregate([
+  {
+    $group: {
+      _id: null,
+      avgHomeGoals: { $avg: "$FTHome" },
+      avgAwayGoals: { $avg: "$FTAway" },
+      maxHomeGoals: { $max: "$FTHome" },
+      maxAwayGoals: { $max: "$FTAway" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      avgHomeGoals: 1,
+      avgAwayGoals: 1,
+      maxHomeGoals: 1,
+      maxAwayGoals: 1
+    }
+  }
+])
+
+// 2.3.2. Número total de partidos ganados, empatados y perdidos por cada equipo 
+db.matches.aggregate([
+  {
+    $group: {
+      _id: "$HomeTeam",
+      wins: { $sum: { $cond: [ { $eq: ["$FTResult", "H"] }, 1, 0 ] } },
+      draws: { $sum: { $cond: [ { $eq: ["$FTResult", "D"] }, 1, 0 ] } },
+      losses: { $sum: { $cond: [ { $eq: ["$FTResult", "A"] }, 1, 0 ] } }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      HomeTeam: "$_id",
+      wins: 1,
+      draws: 1,
+      losses: 1
+    }
+  },
+  {
+    $sort: { wins: -1 }
+  },
+  {
+    $limit: 5
+  }
+])
